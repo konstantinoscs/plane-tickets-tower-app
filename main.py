@@ -9,10 +9,86 @@ import datetime
 AMADEUS_CLIENT_ID = os.environ.get("api-key", "YOUR_AMADEUS_CLIENT_ID")
 AMADEUS_CLIENT_SECRET = os.environ.get("api-secret", "YOUR_AMADEUS_CLIENT_SECRET")
 
+def get_airline_name_from_api(token, carrier_code):
+    """
+    Fetches airline name from Amadeus API using the airline code.
+    
+    Args:
+        token (str): The Amadeus API access token
+        carrier_code (str): The airline IATA code
+        
+    Returns:
+        str: Full airline name or code if not found
+    """
+    if not carrier_code or carrier_code in airline_cache:
+        return airline_cache.get(carrier_code, carrier_code)
+    
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    params = {
+        "airlineCodes": carrier_code
+    }
+    
+    try:
+        response = requests.get(AIRLINES_URL, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        airlines = data.get("data", [])
+        if airlines:
+            airline = airlines[0]
+            # Use business name if available, otherwise common name
+            airline_name = airline.get("businessName") or airline.get("commonName", carrier_code)
+            airline_cache[carrier_code] = airline_name
+            return airline_name
+        else:
+            # If not found in API, cache the code itself
+            airline_cache[carrier_code] = carrier_code
+            return carrier_code
+            
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️  Could not fetch airline name for {carrier_code}: {e}")
+        # If API fails, just return the code
+        return carrier_code
+
+def get_airline_name(segment, token=None):
+    """
+    Gets the full airline name from a flight segment.
+    
+    Args:
+        segment (dict): Flight segment data from Amadeus API
+        token (str): The Amadeus API access token (optional)
+        
+    Returns:
+        str: Full airline name or code if not found
+    """
+    carrier_code = segment.get("carrierCode", "")
+    
+    if not carrier_code:
+        return "Unknown"
+    
+    # First try to get the airline name from the API response
+    airline_name = segment.get("carrier", "")
+    if airline_name and airline_name != carrier_code:
+        return airline_name
+    
+    # If we have a token, try to fetch from Amadeus API
+    if token:
+        return get_airline_name_from_api(token, carrier_code)
+    
+    # If no token provided, just return the code
+    return carrier_code
+
 # Amadeus API endpoint URLs (using the test environment)
 TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
 # Flight Offers Search API supports connecting flights
 FLIGHT_OFFERS_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+# Airline information endpoint
+AIRLINES_URL = "https://test.api.amadeus.com/v1/reference-data/airlines"
+
+# Cache for airline names to avoid repeated API calls
+airline_cache = {}
 
 def get_amadeus_token():
     """
@@ -144,7 +220,7 @@ def search_flights_by_month(token, origin, destination, max_connections=2):
     
     return cheapest_by_month, overall_cheapest_offer
 
-def display_cheapest_month(cheapest_by_month, overall_cheapest_offer, origin, destination):
+def display_cheapest_month(cheapest_by_month, overall_cheapest_offer, origin, destination, token=None):
     """
     Displays the cheapest flight options per month and overall.
 
@@ -172,11 +248,15 @@ def display_cheapest_month(cheapest_by_month, overall_cheapest_offer, origin, de
             departure_date = segments[0].get("departure", {}).get("at", "").split("T")[0]
             month_name = datetime.datetime.strptime(departure_date, "%Y-%m-%d").strftime("%B %Y")
             
-            # Count connections
+            # Count connections and get airline info
             connections = len(segments) - 1
             connection_text = "Direct" if connections == 0 else f"{connections} connection{'s' if connections > 1 else ''}"
             
-            print(f"  - {month_name+':':<15} ${price} on {departure_date} ({connection_text})")
+            # Get airline information from the first segment
+            first_segment = segments[0]
+            airline_name = get_airline_name(first_segment, token)
+            
+            print(f"  - {month_name+':':<15} ${price} on {departure_date} ({connection_text}) - {airline_name}")
 
     if overall_cheapest_offer:
         print("\n--- 🏆 Overall Cheapest Trip Found ---")
@@ -190,9 +270,14 @@ def display_cheapest_month(cheapest_by_month, overall_cheapest_offer, origin, de
             connections = len(segments) - 1
             connection_text = "Direct" if connections == 0 else f"{connections} connection{'s' if connections > 1 else ''}"
             
+            # Get airline information
+            first_segment = segments[0]
+            airline_name = get_airline_name(first_segment, token)
+            
             print(f"  💰 Price: ${price}")
             print(f"  📅 Date:  {departure_date}")
             print(f"  🔄 Route:  {connection_text}")
+            print(f"  ✈️  Airline: {airline_name}")
             
             # Show route details for connecting flights
             if connections > 0:
@@ -240,7 +325,7 @@ def main():
         return
 
     cheapest_by_month, overall_cheapest = search_flights_by_month(token, ORIGIN, DESTINATION, MAX_CONNECTIONS)
-    display_cheapest_month(cheapest_by_month, overall_cheapest, ORIGIN, DESTINATION)
+    display_cheapest_month(cheapest_by_month, overall_cheapest, ORIGIN, DESTINATION, token)
 
 if __name__ == "__main__":
     main()
