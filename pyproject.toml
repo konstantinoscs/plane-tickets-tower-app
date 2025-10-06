@@ -1,0 +1,9 @@
+[project]
+name = "plane-tickets"
+version = "0.1.0"
+description = "Awesome app that checks ticket prices to win the Tower hackathon."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "tower>=0.8.1",
+]
