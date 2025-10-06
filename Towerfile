@@ -16,3 +16,8 @@ default = "TPE"
 name = "max_connections"
 description = "Maximum number of connections allowed"
 default = "2"
+
+[[parameters]]
+name = "return_days_ahead"
+description = "Days ahead for return flight"
+default = "3"

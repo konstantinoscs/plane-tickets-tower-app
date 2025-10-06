@@ -116,7 +116,7 @@ def get_amadeus_token():
             print(f"   Error details: {e.response.json()}")
         return None
 
-def find_cheapest_flights(token, origin, destination, departure_date, max_connections=2):
+def find_cheapest_flights(token, origin, destination, departure_date, return_date=None, max_connections=2):
     """
     Searches for the cheapest flights for a given route and date, including connecting flights.
 
@@ -125,12 +125,16 @@ def find_cheapest_flights(token, origin, destination, departure_date, max_connec
         origin (str): The origin airport/city code (e.g., "MAD").
         destination (str): The destination airport/city code (e.g., "BOS").
         departure_date (str): The departure date in YYYY-MM-DD format.
+        return_date (str): The return date in YYYY-MM-DD format (optional for round-trip).
         max_connections (int): Maximum number of connections allowed (0 for direct only, 1-2 for connecting flights).
 
     Returns:
         list: A list of flight offers, or an empty list if an error occurs.
     """
-    print(f"\n✈️  Finding cheapest flights for: {origin} -> {destination} on {departure_date}...")
+    trip_type = "round-trip" if return_date else "one-way"
+    print(f"\n✈️  Finding cheapest {trip_type} flights for: {origin} -> {destination} on {departure_date}")
+    if return_date:
+        print(f"   Return: {destination} -> {origin} on {return_date}")
     print(f"   (Including flights with up to {max_connections} connections)")
     
     headers = {
@@ -144,6 +148,10 @@ def find_cheapest_flights(token, origin, destination, departure_date, max_connec
         "max": 10,  # Limit results for performance
         "currencyCode": "EUR"
     }
+    
+    # Add return date if provided
+    if return_date:
+        params["returnDate"] = return_date
 
     try:
         response = requests.get(FLIGHT_OFFERS_URL, headers=headers, params=params)
@@ -152,15 +160,19 @@ def find_cheapest_flights(token, origin, destination, departure_date, max_connec
         data = response.json()
         offers = data.get("data", [])
         
-        # Filter offers by number of connections
+        # Filter offers by number of connections and minimum duration
         filtered_offers = []
         for offer in offers:
             itinerary = offer.get("itineraries", [{}])[0]
             segments = itinerary.get("segments", [])
             connections = len(segments) - 1  # Number of connections = segments - 1
             
-            if connections <= max_connections:
-                filtered_offers.append(offer)
+            # Check connection limit
+            if connections > max_connections:
+                continue
+                
+            
+            filtered_offers.append(offer)
         
         print(f"   Found {len(filtered_offers)} flights with {max_connections} or fewer connections")
         return filtered_offers
@@ -171,7 +183,7 @@ def find_cheapest_flights(token, origin, destination, departure_date, max_connec
             print(f"   Error details: {e.response.json()}")
         return []
 
-def search_flights_by_month(token, origin, destination, max_connections=2):
+def search_flights_by_month(token, origin, destination, max_connections=2, return_days_ahead=7):
     """
     Searches for the cheapest flights across multiple months, including connecting flights.
 
@@ -180,6 +192,7 @@ def search_flights_by_month(token, origin, destination, max_connections=2):
         origin (str): The origin airport/city code.
         destination (str): The destination airport/city code.
         max_connections (int): Maximum number of connections allowed.
+        return_days_ahead (int): Days ahead for return flight (controls trip duration).
 
     Returns:
         dict: A dictionary with month keys and cheapest flight offers.
@@ -196,8 +209,11 @@ def search_flights_by_month(token, origin, destination, max_connections=2):
         search_date = current_date + datetime.timedelta(days=30 * month_offset)
         date_str = search_date.strftime("%Y-%m-%d")
         
-        print(f"   Searching {date_str}...")
-        offers = find_cheapest_flights(token, origin, destination, date_str, max_connections)
+        # Calculate return date for round-trip
+        return_date = (search_date + datetime.timedelta(days=return_days_ahead)).strftime("%Y-%m-%d")
+        
+        print(f"   Searching {date_str} (return: {return_date})...")
+        offers = find_cheapest_flights(token, origin, destination, date_str, return_date, max_connections)
         
         if offers:
             # Find the cheapest offer for this date
@@ -281,7 +297,7 @@ def display_cheapest_month(cheapest_by_month, overall_cheapest_offer, origin, de
             
             # Show route details for connecting flights
             if connections > 0:
-                print(f"  🛫 Route details:")
+                print(f"  🛫 Outbound route details:")
                 for i, segment in enumerate(segments):
                     departure = segment.get("departure", {})
                     arrival = segment.get("arrival", {})
@@ -293,9 +309,25 @@ def display_cheapest_month(cheapest_by_month, overall_cheapest_offer, origin, de
                     dep_time = departure.get("at", "").split("T")[1][:5] if departure.get("at") else ""
                     arr_time = arrival.get("at", "").split("T")[1][:5] if arrival.get("at") else ""
                     
-                    if i == 0:
-                        print(f"     {dep_airport} → {arr_airport} {carrier}{flight_number} {dep_time}-{arr_time}")
-                    else:
+                    print(f"     {dep_airport} → {arr_airport} {carrier}{flight_number} {dep_time}-{arr_time}")
+            
+            # Show return flight details if it's a round-trip
+            if len(overall_cheapest_offer.get("itineraries", [])) > 1:
+                return_itinerary = overall_cheapest_offer.get("itineraries", [{}])[1]
+                return_segments = return_itinerary.get("segments", [])
+                if return_segments:
+                    print(f"  🛬 Return route details:")
+                    for i, segment in enumerate(return_segments):
+                        departure = segment.get("departure", {})
+                        arrival = segment.get("arrival", {})
+                        carrier = segment.get("carrierCode", "Unknown")
+                        flight_number = segment.get("number", "")
+                        
+                        dep_airport = departure.get("iataCode", "")
+                        arr_airport = arrival.get("iataCode", "")
+                        dep_time = departure.get("at", "").split("T")[1][:5] if departure.get("at") else ""
+                        arr_time = arrival.get("at", "").split("T")[1][:5] if arrival.get("at") else ""
+                        
                         print(f"     {dep_airport} → {arr_airport} {carrier}{flight_number} {dep_time}-{arr_time}")
     
     print("\n-----------------------------------------")
@@ -315,16 +347,17 @@ def main():
 
     # --- Itinerary to Check ---
     # You can use IATA codes for cities (e.g. NYC) or specific airports (e.g. JFK)
-    ORIGIN = os.environ.get("origin")   
-    DESTINATION = os.environ.get("destination")
-    MAX_CONNECTIONS = int(os.environ.get("max_connections"))  # Allow up to 2 connections (0 = direct only, 1 = 1 connection, 2 = 2 connections)
+    ORIGIN = os.environ.get("origin", "BER")   
+    DESTINATION = os.environ.get("destination", "LON")
+    MAX_CONNECTIONS = int(os.environ.get("max_connections", "2"))  # Allow up to 2 connections (0 = direct only, 1 = 1 connection, 2 = 2 connections)
+    RETURN_DAYS_AHEAD = int(os.environ.get("return_days_ahead", "7"))  # Days ahead for return flight (controls trip duration)
 
     token = get_amadeus_token()
     if not token:
         print("\nCould not proceed without an API token. Please check your credentials.")
         return
 
-    cheapest_by_month, overall_cheapest = search_flights_by_month(token, ORIGIN, DESTINATION, MAX_CONNECTIONS)
+    cheapest_by_month, overall_cheapest = search_flights_by_month(token, ORIGIN, DESTINATION, MAX_CONNECTIONS, RETURN_DAYS_AHEAD)
     display_cheapest_month(cheapest_by_month, overall_cheapest, ORIGIN, DESTINATION, token)
 
 if __name__ == "__main__":
