@@ -315,9 +315,9 @@ def main():
 
     # --- Itinerary to Check ---
     # You can use IATA codes for cities (e.g. NYC) or specific airports (e.g. JFK)
-    ORIGIN = "BER"
-    DESTINATION = "TPE"
-    MAX_CONNECTIONS = 2  # Allow up to 2 connections (0 = direct only, 1 = 1 connection, 2 = 2 connections)
+    ORIGIN = os.environ.get("origin")   
+    DESTINATION = os.environ.get("destination")
+    MAX_CONNECTIONS = int(os.environ.get("max_connections"))  # Allow up to 2 connections (0 = direct only, 1 = 1 connection, 2 = 2 connections)
 
     token = get_amadeus_token()
     if not token:

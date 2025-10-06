@@ -1,3 +1,18 @@
 [app]
 name = "plane-tickets"
 script = "./main.py"
+
+[[parameters]]
+name = "origin"
+description = "Origin airport/city code"
+default = "BER"
+
+[[parameters]]
+name = "destination"
+description = "Destination airport/city code"
+default = "TPE"
+
+[[parameters]]
+name = "max_connections"
+description = "Maximum number of connections allowed"
+default = "2"
