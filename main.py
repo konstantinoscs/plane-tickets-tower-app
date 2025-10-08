@@ -4,8 +4,8 @@ import datetime
 import re # Import regular expressions for parsing duration
 
 # --- Configuration ---
-AMADEUS_CLIENT_ID = os.environ.get("api-key", "YOUR_AMADEUS_CLIENT_ID")
-AMADEUS_CLIENT_SECRET = os.environ.get("api-secret", "YOUR_AMADEUS_CLIENT_SECRET")
+AMADEUS_CLIENT_ID = os.environ.get("amadeus-api-key", "YOUR_AMADEUS_CLIENT_ID")
+AMADEUS_CLIENT_SECRET = os.environ.get("amadeus-api-secret", "YOUR_AMADEUS_CLIENT_SECRET")
 
 class FlightFinder:
     """
