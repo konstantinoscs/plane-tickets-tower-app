@@ -10,14 +10,19 @@ default = "BER"
 [[parameters]]
 name = "destination"
 description = "Destination airport/city code"
-default = "TPE"
+default = "LAX"
 
 [[parameters]]
 name = "max_connections"
 description = "Maximum number of connections allowed"
-default = "2"
+default = "1"
 
 [[parameters]]
-name = "return_days_ahead"
-description = "Days ahead for return flight"
-default = "3"
+name = "min_trip_days"
+description = "Minimum trip duration in days"
+default = "25"
+
+[[parameters]]
+name = "max_trip_days"
+description = "Maximum trip duration in days"
+default = "30"
