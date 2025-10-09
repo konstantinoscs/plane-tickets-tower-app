@@ -177,6 +177,19 @@ class FlightFinder:
         print(f"  Route: {origin} -> {destination}")
         print(f"  💰 Price: {price.get('total')} {price.get('currency')}")
         
+        # Extract and display dates
+        if itineraries:
+            outbound_segments = itineraries[0].get("segments", [])
+            inbound_segments = itineraries[1].get("segments", []) if len(itineraries) > 1 else []
+            
+            if outbound_segments:
+                departure_date = datetime.datetime.fromisoformat(outbound_segments[0]['departure']['at']).strftime('%Y-%m-%d')
+                print(f"  📅 Departure Date: {departure_date}")
+            
+            if inbound_segments:
+                return_date = datetime.datetime.fromisoformat(inbound_segments[-1]['arrival']['at']).strftime('%Y-%m-%d')
+                print(f"  📅 Return Date: {return_date}")
+        
         for i, itinerary in enumerate(itineraries):
             journey = "➡️  Outbound" if i == 0 else "⬅️  Inbound"
             segments = itinerary.get("segments", [])
